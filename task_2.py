@@ -1,104 +1,66 @@
 """
 Завдання 2
-Користувач вводить з клавіатури шлях до файлу. Після
-чого запускаються три потоки. Перший потік заповнює файл
-випадковими числами. Два інші потоки очікують на заповнення. Коли файл заповнений, обидва потоки стартують.
-Перший потік знаходить усі прості числа, другий потік знаходить факторіал кожного числа у файлі. Результати пошуку
-кожен потік має записати у новий файл. Виведіть на екран
-статистику виконаних операцій.
-
+Реалізуйте клієнт-серверний додаток з можливістю надсилати файли. Один користувач ініціює надсилання файлу, другий
+підтверджує. Після підтвердження починається надсилання.
+Якщо відправка була вдалою, повідомте про це відправника.
 """
 
-import threading
-import random
-import math
+#Серверний додаток (server.py)
+import socket
 
-
-class FileFillerThread(threading.Thread):
-    def __init__(self, filename, size):
-        super().__init__()
-        self.filename = filename
-        self.size = size
-
-    def run(self):
-        with open(self.filename, 'w') as file:
-            for _ in range(self.size):
-                file.write(str(random.randint(1, 100)) + '\n')
-        print("File filled:", self.filename)
-
-
-class PrimeNumbersThread(threading.Thread):
-    def __init__(self, input_filename, output_filename):
-        super().__init__()
-        self.input_filename = input_filename
-        self.output_filename = output_filename
-
-    def is_prime(self, n):
-        if n <= 1:
-            return False
-        if n <= 3:
-            return True
-        if n % 2 == 0 or n % 3 == 0:
-            return False
-        i = 5
-        while i * i <= n:
-            if n % i == 0 or n % (i + 2) == 0:
-                return False
-            i += 6
-        return True
-
-    def run(self):
-        primes = []
-        with open(self.input_filename, 'r') as file:
-            for line in file:
-                number = int(line.strip())
-                if self.is_prime(number):
-                    primes.append(number)
-        with open(self.output_filename, 'w') as file:
-            for prime in primes:
-                file.write(str(prime) + '\n')
-        print("Prime numbers written to:", self.output_filename)
-
-
-class FactorialThread(threading.Thread):
-    def __init__(self, input_filename, output_filename):
-        super().__init__()
-        self.input_filename = input_filename
-        self.output_filename = output_filename
-
-    def run(self):
-        with open(self.input_filename, 'r') as infile, open(self.output_filename, 'w') as outfile:
-            for line in infile:
-                number = int(line.strip())
-                factorial = math.factorial(number)
-                outfile.write(str(factorial) + '\n')
-        print("Factorials written to:", self.output_filename)
-
+def handle_client(client_socket):
+    try:
+        data = client_socket.recv(1024).decode('utf-8')
+        if data == "send_file":
+            client_socket.sendall("Send the file.".encode('utf-8'))
+            filename = client_socket.recv(1024).decode('utf-8')
+            with open(filename, 'wb') as f:
+                while True:
+                    data = client_socket.recv(1024)
+                    if not data:
+                        break
+                    f.write(data)
+            client_socket.sendall("File received successfully.".encode('utf-8'))
+    except:
+        pass
+    finally:
+        client_socket.close()
 
 def main():
-    input_filename = input("Enter the path to the input file: ")
-    output_prime_filename = "prime_numbers.txt"
-    output_factorial_filename = "factorials.txt"
-    size = 10
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.bind(('localhost', 5555))
+    server_socket.listen(1)
 
-    filler_thread = FileFillerThread(input_filename, size)
-    prime_thread = PrimeNumbersThread(input_filename, output_prime_filename)
-    factorial_thread = FactorialThread(input_filename, output_factorial_filename)
+    print("Server started. Waiting for a client...")
 
-    filler_thread.start()
+    while True:
+        client_socket, addr = server_socket.accept()
+        print(f"Client connected: {addr}")
+        handle_client(client_socket)
 
-    # Wait for file to be filled
-    filler_thread.join()
+main()
 
-    # Start prime and factorial threads
-    prime_thread.start()
-    factorial_thread.start()
+#Клієнтський додаток (client.py)
+import socket
 
-    # Wait for prime and factorial threads to finish
-    prime_thread.join()
-    factorial_thread.join()
+def main():
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket.connect(('localhost', 5555))
 
-    print("Operations completed.")
+    file_to_send = input("Enter the filename to send: ")
+    client_socket.sendall("send_file".encode('utf-8'))
+    client_socket.recv(1024).decode('utf-8')
+    client_socket.sendall(file_to_send.encode('utf-8'))
 
+    with open(file_to_send, 'rb') as f:
+        while True:
+            data = f.read(1024)
+            if not data:
+                break
+            client_socket.sendall(data)
+
+    print(client_socket.recv(1024).decode('utf-8'))
+
+    client_socket.close()
 
 main()
