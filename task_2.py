@@ -1,104 +1,107 @@
 """
 Завдання 2
-Користувач вводить з клавіатури шлях до файлу. Після
-чого запускаються три потоки. Перший потік заповнює файл
-випадковими числами. Два інші потоки очікують на заповнення. Коли файл заповнений, обидва потоки стартують.
-Перший потік знаходить усі прості числа, другий потік знаходить факторіал кожного числа у файлі. Результати пошуку
-кожен потік має записати у новий файл. Виведіть на екран
-статистику виконаних операцій.
-
+Додайте механізми для оновлення, видалення та вставки
+даних до бази даних за допомогою інтерфейсу меню. Користувач не може ввести запити INSERT, UPDATE, DELETE
+безпосередньо. Забороніть можливість оновлення та видалення
+усіх даних для кожної таблиці (UPDATE та DELETE без умов).
 """
+import sqlite3
 
-import threading
-import random
-import math
+def initialize_database():
+    conn = sqlite3.connect('sales.db')
+    cursor = conn.cursor()
 
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS Sales (
+            id INTEGER PRIMARY KEY,
+            salesman_id INTEGER,
+            customer_id INTEGER,
+            amount REAL
+        )
+    ''')
 
-class FileFillerThread(threading.Thread):
-    def __init__(self, filename, size):
-        super().__init__()
-        self.filename = filename
-        self.size = size
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS Salesmen (
+            id INTEGER PRIMARY KEY,
+            name TEXT
+        )
+    ''')
 
-    def run(self):
-        with open(self.filename, 'w') as file:
-            for _ in range(self.size):
-                file.write(str(random.randint(1, 100)) + '\n')
-        print("File filled:", self.filename)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS Customers (
+            id INTEGER PRIMARY KEY,
+            name TEXT
+        )
+    ''')
 
+    conn.commit()
+    conn.close()
 
-class PrimeNumbersThread(threading.Thread):
-    def __init__(self, input_filename, output_filename):
-        super().__init__()
-        self.input_filename = input_filename
-        self.output_filename = output_filename
+def insert_data(table_name, data):
+    conn = sqlite3.connect('sales.db')
+    cursor = conn.cursor()
+    query = f"INSERT INTO {table_name} VALUES ({','.join(['?'] * len(data))})"
+    cursor.execute(query, data)
+    conn.commit()
+    conn.close()
 
-    def is_prime(self, n):
-        if n <= 1:
-            return False
-        if n <= 3:
-            return True
-        if n % 2 == 0 or n % 3 == 0:
-            return False
-        i = 5
-        while i * i <= n:
-            if n % i == 0 or n % (i + 2) == 0:
-                return False
-            i += 6
-        return True
+def update_data(table_name, set_values, condition):
+    conn = sqlite3.connect('sales.db')
+    cursor = conn.cursor()
+    query = f"UPDATE {table_name} SET {','.join([f'{column}=?' for column in set_values])} WHERE {condition}"
+    cursor.execute(query, set_values.values())
+    conn.commit()
+    conn.close()
 
-    def run(self):
-        primes = []
-        with open(self.input_filename, 'r') as file:
-            for line in file:
-                number = int(line.strip())
-                if self.is_prime(number):
-                    primes.append(number)
-        with open(self.output_filename, 'w') as file:
-            for prime in primes:
-                file.write(str(prime) + '\n')
-        print("Prime numbers written to:", self.output_filename)
+def delete_data(table_name, condition):
+    conn = sqlite3.connect('sales.db')
+    cursor = conn.cursor()
+    query = f"DELETE FROM {table_name} WHERE {condition}"
+    cursor.execute(query)
+    conn.commit()
+    conn.close()
 
+def display_all_data(table_name):
+    conn = sqlite3.connect('sales.db')
+    cursor = conn.cursor()
+    cursor.execute(f"SELECT * FROM {table_name}")
+    data = cursor.fetchall()
+    for row in data:
+        print(row)
+    conn.close()
 
-class FactorialThread(threading.Thread):
-    def __init__(self, input_filename, output_filename):
-        super().__init__()
-        self.input_filename = input_filename
-        self.output_filename = output_filename
+def main_menu():
+    while True:
+        print("\nMain Menu:")
+        print("1. Insert Data")
+        print("2. Update Data")
+        print("3. Delete Data")
+        print("4. Display All Data")
+        print("5. Exit")
 
-    def run(self):
-        with open(self.input_filename, 'r') as infile, open(self.output_filename, 'w') as outfile:
-            for line in infile:
-                number = int(line.strip())
-                factorial = math.factorial(number)
-                outfile.write(str(factorial) + '\n')
-        print("Factorials written to:", self.output_filename)
+        choice = input("Enter your choice: ")
 
+        if choice == '1':
+            table_name = input("Enter table name (Sales, Salesmen, Customers): ")
+            data = input("Enter data separated by commas: ").split(',')
+            insert_data(table_name, data)
+        elif choice == '2':
+            table_name = input("Enter table name (Sales, Salesmen, Customers): ")
+            set_values = input("Enter set values (column1=value1,column2=value2,...): ").split(',')
+            condition = input("Enter condition (column1=value1): ")
+            update_data(table_name, dict([value.split('=') for value in set_values]), condition)
+        elif choice == '3':
+            table_name = input("Enter table name (Sales, Salesmen, Customers): ")
+            condition = input("Enter condition (column1=value1): ")
+            delete_data(table_name, condition)
+        elif choice == '4':
+            table_name = input("Enter table name (Sales, Salesmen, Customers): ")
+            display_all_data(table_name)
+        elif choice == '5':
+            print("Exiting...")
+            break
+        else:
+            print("Invalid choice. Please try again.")
 
-def main():
-    input_filename = input("Enter the path to the input file: ")
-    output_prime_filename = "prime_numbers.txt"
-    output_factorial_filename = "factorials.txt"
-    size = 10
-
-    filler_thread = FileFillerThread(input_filename, size)
-    prime_thread = PrimeNumbersThread(input_filename, output_prime_filename)
-    factorial_thread = FactorialThread(input_filename, output_factorial_filename)
-
-    filler_thread.start()
-
-    # Wait for file to be filled
-    filler_thread.join()
-
-    # Start prime and factorial threads
-    prime_thread.start()
-    factorial_thread.start()
-
-    # Wait for prime and factorial threads to finish
-    prime_thread.join()
-    factorial_thread.join()
-
-    print("Operations completed.")
-
-
-main()
+initialize_database()
+main_menu()
